@@ -12,9 +12,7 @@ const int sensorPin = 8;
 
 // Humidity Sensor
 DHT HT(sensorPin, Type);
-float humidity;
-int setTime = 150;
-int dt = 1000;
+float humidity = 0;
 
 // Buttons
 bool lastUpState = HIGH;
@@ -22,7 +20,7 @@ bool lastDownState = HIGH;
 unsigned long lastButtonMillis = 0; // debounce timer
 const unsigned long debounceTime = 150; // 150 ms debounce
 
-// The value the buttons modify
+// humidity set
 int setHumidity = 85;
 
 // Fan relays
@@ -31,7 +29,7 @@ const unsigned long offTime = 55UL * 60UL * 1000UL;  // 55 minutes
 bool fanState = false;
 
 // Light
-unsigned long lightOnTime = 9UL * 60UL * 60UL * 1000UL;  // 9 hours
+unsigned long lightOnTime  = 9UL  * 60UL * 60UL * 1000UL;  // 9 hours
 unsigned long lightOffTime = 15UL * 60UL * 60UL * 1000UL; // 15 hours
 
 // Timing
@@ -40,7 +38,11 @@ unsigned long previousMillisFan = 0;
 
 // Light timing
 unsigned long previousMillisLight = 0;
-bool lightState = false;
+bool lightState = true;
+
+// DHT timing
+unsigned long previousMillisDHT = 0;
+const unsigned long dhtInterval = 2000; // 2 seconds
 
 void setup() {
   // Humidity sensor
@@ -52,9 +54,9 @@ void setup() {
 
   // Fan Relays (active LOW, so HIGH = OFF)
   pinMode(Fan1RelayPin, OUTPUT);
-  digitalWrite(Fan1RelayPin, HIGH);  // Start with relay OFF
+  digitalWrite(Fan1RelayPin, HIGH);  // Start OFF
   pinMode(Fan2RelayPin, OUTPUT);
-  digitalWrite(Fan2RelayPin, HIGH);  // Start with relay OFF
+  digitalWrite(Fan2RelayPin, HIGH);  // Start OFF
 
   // Humidifier Relay (active LOW)
   pinMode(HumidifierRelayPin, OUTPUT);
@@ -62,77 +64,63 @@ void setup() {
 
   // Light Relay (active LOW)
   pinMode(lightPin, OUTPUT);
-  digitalWrite(lightPin, HIGH); // Start OFF
+  digitalWrite(lightPin, LOW); // Start ON
+
+  // Initialize timers
+  previousMillisFan = millis();
+  previousMillisLight = millis();
 
   Serial.begin(9600);
 }
 
 void loop() {
-  // Buttons
-  bool upState = digitalRead(buttonPinUp);
-  bool downState = digitalRead(buttonPinDown);
   unsigned long currentMillis = millis();
 
   // Humidity sensor
-  humidity = HT.readHumidity();
-  Serial.print("Humidity: ");
-  Serial.print(humidity);
-  Serial.print(" Set Humidity: ");
-  Serial.println(setHumidity);
+  if (currentMillis - previousMillisDHT >= dhtInterval) {
+    humidity = HT.readHumidity();
+    previousMillisDHT = currentMillis;
 
-  // Up button
-  if (upState == LOW && lastUpState == HIGH && currentMillis - lastButtonMillis > debounceTime) {
-    setHumidity++;
-    setHumidity = constrain(setHumidity, 0, 100);
-    lastButtonMillis = currentMillis;
-    Serial.println(setHumidity);
+    Serial.print("Humidity: ");
+    Serial.println(humidity);
   }
 
-  // Down button
-  if (downState == LOW && lastDownState == HIGH && currentMillis - lastButtonMillis > debounceTime) {
-    setHumidity--;
-    setHumidity = constrain(setHumidity, 0, 100);
-    lastButtonMillis = currentMillis;
-    Serial.print("New setHumidity: ");
-    Serial.println(setHumidity);
+  // Humidity relay (active LOW)
+  // ON < 80%, OFF > 85%
+  if (!isnan(humidity)) {
+    if (humidity < 80.0) {
+      digitalWrite(HumidifierRelayPin, LOW);   // Turn ON
+    } 
+    else if (humidity > 85.0) {
+      digitalWrite(HumidifierRelayPin, HIGH);  // Turn OFF
+    }
   }
 
-  lastUpState = upState;
-  lastDownState = downState;
-
-// Fan Relays
+  // Fan Relays
+  // 5 min ON / 55 min OFF
   if (!fanState && currentMillis - previousMillisFan >= offTime) {
-    // Turn fans ON (active LOW)
     digitalWrite(Fan1RelayPin, LOW);
     digitalWrite(Fan2RelayPin, LOW);
     fanState = true;
     previousMillisFan = currentMillis;
-  } else if (fanState && currentMillis - previousMillisFan >= onTime) {
-    // Turn fans OFF
+  } 
+  else if (fanState && currentMillis - previousMillisFan >= onTime) {
     digitalWrite(Fan1RelayPin, HIGH);
     digitalWrite(Fan2RelayPin, HIGH);
     fanState = false;
     previousMillisFan = currentMillis;
   }
 
-  // Humidity relay (active LOW)
-  if (humidity < setHumidity) {
-    digitalWrite(HumidifierRelayPin, LOW);  // Turn ON
-  } else {
-    digitalWrite(HumidifierRelayPin, HIGH); // Turn OFF
-  }
-
   // Light relay (active LOW)
-  if (!lightState && currentMillis - previousMillisLight >= lightOffTime) {
-    digitalWrite(lightPin, LOW);  // Turn ON
-    lightState = true;
-    previousMillisLight = currentMillis;
-  } else if (lightState && currentMillis - previousMillisLight >= lightOnTime) {
+  // 9 hours ON / 15 hours OFF
+  if (lightState && currentMillis - previousMillisLight >= lightOnTime) {
     digitalWrite(lightPin, HIGH); // Turn OFF
     lightState = false;
     previousMillisLight = currentMillis;
+  } 
+  else if (!lightState && currentMillis - previousMillisLight >= lightOffTime) {
+    digitalWrite(lightPin, LOW);  // Turn ON
+    lightState = true;
+    previousMillisLight = currentMillis;
   }
-
-  // Humidity display
-  int displayValue = constrain(setHumidity, 0, 100);
 }
