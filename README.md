@@ -1,7 +1,7 @@
-# Mushroom Environment Control  - Arduino based
+# Sporebox - Arduino powered
 
 
-This project is a microcontroller-based environmental controller for scalable hobby setups. It automatically manages humidity, fans, and grow lights using a DHT11 sensor and relays with an Arduino.
+Sporebox is a microcontroller-based environmental controller for small-scale hobby setups. It automatically manages humidity, fans, and grow lights using a DHT11 sensor and relays with an Arduino.
 
 ---
 
